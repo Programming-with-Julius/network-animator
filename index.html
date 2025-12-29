@@ -1,0 +1,1134 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Neural Network Visualizer</title>
+
+  <!-- Bootstrap -->
+  <link
+    href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"
+    rel="stylesheet"
+    integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH"
+    crossorigin="anonymous"
+  />
+
+  <style>
+    :root{
+      --stage-bg: #07080b;
+      --stage-border: rgba(255,255,255,0.08);
+      --stage-vh: 58vh;
+    }
+
+    body { background: #f8f9fa; }
+
+    #stageWrapper{
+      background: var(--stage-bg);
+      border-bottom: 1px solid var(--stage-border);
+    }
+
+    #stage{
+      position: relative;
+      width: 100%;
+      height: var(--stage-vh);
+      min-height: 360px;
+      overflow: hidden;
+    }
+
+    /* Subtle vignette/noise */
+    #stage::before{
+      content:"";
+      position:absolute;
+      inset:0;
+      pointer-events:none;
+      background:
+        radial-gradient(ellipse at center, rgba(255,255,255,0.06), rgba(0,0,0,0) 55%),
+        radial-gradient(ellipse at center, rgba(0,0,0,0) 40%, rgba(0,0,0,0.6));
+      mix-blend-mode: overlay;
+    }
+
+    canvas#nnCanvas{
+      position:absolute;
+      inset:0;
+      width:100%;
+      height:100%;
+      display:block;
+    }
+
+    #editorWrapper{ background:#f8f9fa; }
+
+    .code-like{
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+      font-size: 12px;
+      line-height: 1.35;
+      white-space: pre;
+    }
+
+    .small-help{ font-size: 12px; color: #6c757d; }
+
+    .color-swatch{
+      width: 1.5rem;
+      height: 1.5rem;
+      border-radius: .375rem;
+      border: 1px solid rgba(0,0,0,0.15);
+      display: inline-block;
+      vertical-align: middle;
+      background: var(--swatch, #fff);
+    }
+
+    .kbd{
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+      padding: .1rem .35rem;
+      border: 1px solid rgba(0,0,0,.15);
+      border-bottom-width: 2px;
+      border-radius: .35rem;
+      background: #fff;
+      font-size: 12px;
+    }
+  </style>
+</head>
+
+<body>
+  <!-- TOP: CANVAS -->
+  <div id="stageWrapper" class="container-fluid p-0">
+    <div id="stage">
+      <canvas id="nnCanvas"></canvas>
+    </div>
+  </div>
+
+  <!-- BOTTOM: SETTINGS -->
+  <div id="editorWrapper" class="container-fluid py-3">
+    <div class="row g-3">
+
+      <div class="col-12">
+        <div class="d-flex flex-wrap gap-3 align-items-end">
+
+          <div style="min-width: 280px;">
+            <label class="form-label mb-1" for="layersInput">Layers (nodes per layer)</label>
+            <input id="layersInput" class="form-control" type="text" value="6, 8, 8, 4" />
+            <div class="small-help">Comma-separated, e.g. <span class="kbd">4,6,6,3</span></div>
+          </div>
+
+          <div>
+            <label class="form-label mb-1" for="fpsInput">FPS</label>
+            <input id="fpsInput" class="form-control" type="number" min="1" max="60" step="1" value="30" />
+          </div>
+
+          <div>
+            <label class="form-label mb-1" for="stageHeightInput">Stage height (vh)</label>
+            <input id="stageHeightInput" class="form-control" type="number" min="20" max="90" step="1" value="58" />
+          </div>
+
+          <div class="form-check form-switch mb-1">
+            <input class="form-check-input" type="checkbox" role="switch" id="glowToggle" checked>
+            <label class="form-check-label" for="glowToggle">Glow</label>
+          </div>
+
+          <div class="form-check form-switch mb-1">
+            <input class="form-check-input" type="checkbox" role="switch" id="animateToggle" checked>
+            <label class="form-check-label" for="animateToggle">Animated dashes</label>
+          </div>
+
+          <div class="form-check form-switch mb-1">
+            <input class="form-check-input" type="checkbox" role="switch" id="curveToggle" checked>
+            <label class="form-check-label" for="curveToggle">Curved edges</label>
+          </div>
+
+          <div class="form-check form-switch mb-1">
+            <input class="form-check-input" type="checkbox" role="switch" id="weightToggle" checked>
+            <label class="form-check-label" for="weightToggle">Weight-based opacity</label>
+          </div>
+
+          <button id="randomizeBtn" class="btn btn-primary mb-1" type="button">Randomize weights</button>
+          <button id="exportBtn" class="btn btn-outline-secondary mb-1" type="button">Export PNG</button>
+          <button id="resetBtn" class="btn btn-outline-secondary mb-1" type="button">Reset defaults</button>
+        </div>
+      </div>
+
+      <div class="col-12 col-xl-8">
+        <div class="card shadow-sm">
+          <div class="card-header fw-semibold">Look & Layout</div>
+          <div class="card-body">
+            <div class="row g-3">
+
+              <div class="col-12 col-md-6">
+                <label class="form-label" for="bgColor">Background</label>
+                <div class="input-group">
+                  <input id="bgColor" class="form-control form-control-color" type="color" value="#07080b" />
+                  <input id="bgColorText" class="form-control code-like" type="text" value="#07080b" />
+                  <span class="input-group-text"><span id="bgSwatch" class="color-swatch"></span></span>
+                </div>
+              </div>
+
+              <div class="col-12 col-md-6">
+                <label class="form-label" for="paddingInput">Padding (px)</label>
+                <input id="paddingInput" class="form-control" type="number" min="0" max="200" step="1" value="60" />
+              </div>
+
+              <div class="col-12 col-md-6">
+                <label class="form-label" for="nodeRadius">Node radius (px)</label>
+                <input id="nodeRadius" class="form-control" type="number" min="1" max="80" step="1" value="10" />
+              </div>
+
+              <div class="col-12 col-md-6">
+                <label class="form-label" for="nodeStrokeWidth">Node outline width</label>
+                <input id="nodeStrokeWidth" class="form-control" type="number" min="0.5" max="10" step="0.5" value="2" />
+              </div>
+
+              <div class="col-12 col-md-6">
+                <label class="form-label" for="nodeStroke">Node outline color</label>
+                <div class="input-group">
+                  <input id="nodeStroke" class="form-control form-control-color" type="color" value="#ffffff" />
+                  <input id="nodeStrokeText" class="form-control code-like" type="text" value="#ffffff" />
+                  <span class="input-group-text"><span id="nodeSwatch" class="color-swatch"></span></span>
+                </div>
+              </div>
+
+              <div class="col-12 col-md-6">
+                <label class="form-label" for="nodeFill">Node fill</label>
+                <div class="input-group">
+                  <input id="nodeFill" class="form-control form-control-color" type="color" value="#07080b" />
+                  <input id="nodeFillText" class="form-control code-like" type="text" value="#07080b" />
+                  <span class="input-group-text"><span id="fillSwatch" class="color-swatch"></span></span>
+                </div>
+                <div class="small-help">Tip: set fill to background for “hollow” nodes.</div>
+              </div>
+
+              <div class="col-12 col-md-6">
+                <label class="form-label" for="edgeColor">Edge color</label>
+                <div class="input-group">
+                  <input id="edgeColor" class="form-control form-control-color" type="color" value="#9aa0a6" />
+                  <input id="edgeColorText" class="form-control code-like" type="text" value="#9aa0a6" />
+                  <span class="input-group-text"><span id="edgeSwatch" class="color-swatch"></span></span>
+                </div>
+              </div>
+
+              <div class="col-12 col-md-6">
+                <label class="form-label" for="edgeWidth">Edge width</label>
+                <input id="edgeWidth" class="form-control" type="number" min="0.25" max="8" step="0.25" value="1.25" />
+              </div>
+
+              <div class="col-12 col-md-6">
+                <label class="form-label" for="edgeOpacity">Base edge opacity</label>
+                <input id="edgeOpacity" class="form-control" type="number" min="0" max="1" step="0.05" value="0.40" />
+              </div>
+
+              <div class="col-12 col-md-6">
+                <label class="form-label" for="edgeDropout">Edge dropout (performance / style)</label>
+                <input id="edgeDropout" class="form-control" type="number" min="0" max="0.95" step="0.05" value="0" />
+                <div class="small-help">0 = fully connected; 0.5 = show ~50% edges.</div>
+              </div>
+
+              <div class="col-12 col-md-6">
+                <label class="form-label" for="curveAmount">Curve amount</label>
+                <input id="curveAmount" class="form-control" type="number" min="0" max="1" step="0.05" value="0.35" />
+              </div>
+
+              <div class="col-12 col-md-6">
+                <label class="form-label" for="labelToggle" style="display:block;">Labels</label>
+                <div class="form-check form-switch">
+                  <input class="form-check-input" type="checkbox" role="switch" id="labelToggle">
+                  <label class="form-check-label" for="labelToggle">Show (layer,node) on hover</label>
+                </div>
+                <div class="small-help">Hover highlights a node and its incident edges.</div>
+              </div>
+
+              <div class="col-12">
+                <hr class="my-2" />
+                <div class="small-help">
+                  Extras included: animated dashes, curved edges, weight-based opacity, edge dropout, hover highlight, PNG export.
+                </div>
+              </div>
+
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="col-12 col-xl-4">
+        <div class="card shadow-sm">
+          <div class="card-header fw-semibold">Glow & Animation</div>
+          <div class="card-body">
+            <div class="row g-3">
+
+              <div class="col-12">
+                <label class="form-label" for="nodeGlow">Node glow blur</label>
+                <input id="nodeGlow" class="form-control" type="number" min="0" max="80" step="1" value="16" />
+              </div>
+
+              <div class="col-12">
+                <label class="form-label" for="edgeGlow">Edge glow blur</label>
+                <input id="edgeGlow" class="form-control" type="number" min="0" max="80" step="1" value="10" />
+              </div>
+
+              <div class="col-12">
+                <label class="form-label" for="dashLen">Dash length</label>
+                <input id="dashLen" class="form-control" type="number" min="1" max="80" step="1" value="10" />
+              </div>
+
+              <div class="col-12">
+                <label class="form-label" for="dashGap">Dash gap</label>
+                <input id="dashGap" class="form-control" type="number" min="0" max="80" step="1" value="14" />
+              </div>
+
+              <div class="col-12">
+                <label class="form-label" for="dashSpeed">Dash speed</label>
+                <input id="dashSpeed" class="form-control" type="number" min="0" max="600" step="10" value="180" />
+                <div class="small-help">0 disables motion (even if “Animated dashes” is on).</div>
+              </div>
+
+              <div class="col-12">
+                <label class="form-label" for="seedInput">Weight seed</label>
+                <input id="seedInput" class="form-control code-like" type="text" value="1337" />
+                <div class="small-help">Stable weights across redraws unless randomized.</div>
+              </div>
+
+            </div>
+          </div>
+        </div>
+
+        <div class="card shadow-sm mt-3">
+          <div class="card-header fw-semibold">Info</div>
+          <div class="card-body">
+            <div class="small-help mb-2">
+              <div><span class="kbd">Mouse</span> hover: highlight</div>
+              <div><span class="kbd">R</span> randomize weights</div>
+              <div><span class="kbd">Space</span> toggle animation</div>
+            </div>
+            <div id="stats" class="code-like small-help"></div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <script>
+    /********************
+     * Utilities
+     ********************/
+    function clamp(v, a, b){ return Math.max(a, Math.min(b, v)); }
+
+    function parseHexColor(s, fallback){
+      const t = String(s || "").trim();
+      if (/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(t)) return t;
+      return fallback;
+    }
+
+    function parseLayerSizes(s){
+      const parts = String(s || "")
+        .split(/[,x]/i)
+        .map(x => x.trim())
+        .filter(Boolean);
+
+      const out = parts
+        .map(x => Number(x))
+        .filter(n => Number.isFinite(n))
+        .map(n => Math.round(n))
+        .map(n => clamp(n, 1, 256));
+
+      // Need at least 2 layers
+      return out.length >= 2 ? out : null;
+    }
+
+    // Seeded RNG: mulberry32
+    function mulberry32(seed){
+      let a = (seed >>> 0) || 0x12345678;
+      return function(){
+        a |= 0;
+        a = (a + 0x6D2B79F5) | 0;
+        let t = Math.imul(a ^ (a >>> 15), 1 | a);
+        t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+        return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+      };
+    }
+
+    function hashStringToU32(str){
+      // FNV-1a-ish
+      let h = 2166136261 >>> 0;
+      const s = String(str ?? "");
+      for (let i = 0; i < s.length; i++){
+        h ^= s.charCodeAt(i);
+        h = Math.imul(h, 16777619);
+      }
+      return h >>> 0;
+    }
+
+    function debounce(fn, ms){
+      let t = 0;
+      return (...args) => {
+        clearTimeout(t);
+        t = setTimeout(() => fn(...args), ms);
+      };
+    }
+
+    /********************
+     * DOM
+     ********************/
+    const stage = document.getElementById("stage");
+    const canvas = document.getElementById("nnCanvas");
+    const ctx = canvas.getContext("2d");
+
+    const ui = {
+      layersInput: document.getElementById("layersInput"),
+      fpsInput: document.getElementById("fpsInput"),
+      stageHeightInput: document.getElementById("stageHeightInput"),
+
+      glowToggle: document.getElementById("glowToggle"),
+      animateToggle: document.getElementById("animateToggle"),
+      curveToggle: document.getElementById("curveToggle"),
+      weightToggle: document.getElementById("weightToggle"),
+      labelToggle: document.getElementById("labelToggle"),
+
+      randomizeBtn: document.getElementById("randomizeBtn"),
+      exportBtn: document.getElementById("exportBtn"),
+      resetBtn: document.getElementById("resetBtn"),
+
+      bgColor: document.getElementById("bgColor"),
+      bgColorText: document.getElementById("bgColorText"),
+      nodeStroke: document.getElementById("nodeStroke"),
+      nodeStrokeText: document.getElementById("nodeStrokeText"),
+      nodeFill: document.getElementById("nodeFill"),
+      nodeFillText: document.getElementById("nodeFillText"),
+      edgeColor: document.getElementById("edgeColor"),
+      edgeColorText: document.getElementById("edgeColorText"),
+
+      paddingInput: document.getElementById("paddingInput"),
+      nodeRadius: document.getElementById("nodeRadius"),
+      nodeStrokeWidth: document.getElementById("nodeStrokeWidth"),
+      edgeWidth: document.getElementById("edgeWidth"),
+      edgeOpacity: document.getElementById("edgeOpacity"),
+      edgeDropout: document.getElementById("edgeDropout"),
+      curveAmount: document.getElementById("curveAmount"),
+
+      nodeGlow: document.getElementById("nodeGlow"),
+      edgeGlow: document.getElementById("edgeGlow"),
+      dashLen: document.getElementById("dashLen"),
+      dashGap: document.getElementById("dashGap"),
+      dashSpeed: document.getElementById("dashSpeed"),
+      seedInput: document.getElementById("seedInput"),
+
+      bgSwatch: document.getElementById("bgSwatch"),
+      nodeSwatch: document.getElementById("nodeSwatch"),
+      fillSwatch: document.getElementById("fillSwatch"),
+      edgeSwatch: document.getElementById("edgeSwatch"),
+
+      stats: document.getElementById("stats"),
+    };
+
+    const DEFAULTS = {
+      layers: "6, 8, 8, 4",
+      fps: 30,
+      stageVh: 58,
+
+      background: "#07080b",
+      padding: 60,
+
+      nodeRadius: 10,
+      nodeStrokeWidth: 2,
+      nodeStroke: "#ffffff",
+      nodeFill: "#07080b",
+
+      edgeColor: "#9aa0a6",
+      edgeWidth: 1.25,
+      edgeOpacity: 0.40,
+
+      glow: true,
+      nodeGlow: 16,
+      edgeGlow: 10,
+
+      animate: true,
+      dashLen: 10,
+      dashGap: 14,
+      dashSpeed: 180,
+
+      curved: true,
+      curveAmount: 0.35,
+
+      weightOpacity: true,
+      edgeDropout: 0.0,
+
+      seed: "1337",
+      showHoverLabel: false,
+    };
+
+    const state = {
+      // from UI
+      layers: [6,8,8,4],
+      fps: 30,
+      stageVh: 58,
+
+      background: "#07080b",
+      padding: 60,
+
+      nodeRadius: 10,
+      nodeStrokeWidth: 2,
+      nodeStroke: "#ffffff",
+      nodeFill: "#07080b",
+
+      edgeColor: "#9aa0a6",
+      edgeWidth: 1.25,
+      edgeOpacity: 0.40,
+
+      glow: true,
+      nodeGlow: 16,
+      edgeGlow: 10,
+
+      animate: true,
+      dashLen: 10,
+      dashGap: 14,
+      dashSpeed: 180,
+
+      curved: true,
+      curveAmount: 0.35,
+
+      weightOpacity: true,
+      edgeDropout: 0,
+
+      seed: "1337",
+      showHoverLabel: false,
+
+      // derived
+      weights: [],     // per layer-pair: Float32Array
+      positions: [],   // per layer: {x, ys[]}
+      hovered: null,   // {layer, index} or null
+      mouse: {x: 0, y: 0, inside: false},
+    };
+
+    /********************
+     * Canvas sizing
+     ********************/
+    function resizeCanvas(){
+      const rect = stage.getBoundingClientRect();
+      const dpr = Math.max(1, window.devicePixelRatio || 1);
+      const w = Math.max(1, Math.floor(rect.width));
+      const h = Math.max(1, Math.floor(rect.height));
+
+      canvas.width  = Math.floor(w * dpr);
+      canvas.height = Math.floor(h * dpr);
+      canvas.style.width = w + "px";
+      canvas.style.height = h + "px";
+
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0); // draw in CSS pixels
+      computeLayout();
+    }
+
+    /********************
+     * Layout + weights
+     ********************/
+    function computeLayout(){
+      const rect = stage.getBoundingClientRect();
+      const w = rect.width;
+      const h = rect.height;
+
+      const pad = clamp(state.padding, 0, 300);
+      const L = state.layers.length;
+
+      const x0 = pad;
+      const x1 = w - pad;
+      const y0 = pad;
+      const y1 = h - pad;
+
+      state.positions = [];
+
+      for (let li = 0; li < L; li++){
+        const n = state.layers[li];
+        const x = (L === 1) ? (w/2) : (x0 + (x1 - x0) * (li / (L - 1)));
+
+        const ys = new Array(n);
+        if (n === 1){
+          ys[0] = (y0 + y1) / 2;
+        } else {
+          for (let i = 0; i < n; i++){
+            ys[i] = y0 + (y1 - y0) * (i / (n - 1));
+          }
+        }
+        state.positions.push({ x, ys });
+      }
+    }
+
+    function regenerateWeights(){
+      const seedU32 = hashStringToU32(state.seed);
+      const rng = mulberry32(seedU32);
+
+      state.weights = [];
+      for (let li = 0; li < state.layers.length - 1; li++){
+        const a = state.layers[li];
+        const b = state.layers[li + 1];
+        const arr = new Float32Array(a * b);
+        // weights ~ uniform[-1,1]
+        for (let k = 0; k < arr.length; k++){
+          arr[k] = (rng() * 2 - 1);
+        }
+        state.weights.push(arr);
+      }
+    }
+
+    /********************
+     * Drawing helpers
+     ********************/
+    function clear(){
+      ctx.save();
+      ctx.setTransform(1,0,0,1,0,0);
+      ctx.fillStyle = state.background;
+      ctx.fillRect(0,0,canvas.width,canvas.height);
+      ctx.restore();
+    }
+
+    function drawEdges(nowMs){
+      const L = state.layers.length;
+      const curved = state.curved;
+      const curveAmt = clamp(state.curveAmount, 0, 1);
+
+      const baseAlpha = clamp(state.edgeOpacity, 0, 1);
+      const edgeW = clamp(state.edgeWidth, 0.1, 20);
+
+      // dash animation
+      const doDash = state.animate && state.dashSpeed > 0;
+      const dashLen = clamp(state.dashLen, 1, 200);
+      const dashGap = clamp(state.dashGap, 0, 200);
+
+      ctx.save();
+      ctx.lineCap = "round";
+      ctx.lineJoin = "round";
+      ctx.strokeStyle = state.edgeColor;
+      ctx.lineWidth = edgeW;
+
+      if (state.glow){
+        ctx.shadowBlur = clamp(state.edgeGlow, 0, 200);
+        ctx.shadowColor = state.edgeColor;
+      } else {
+        ctx.shadowBlur = 0;
+      }
+
+      if (doDash){
+        ctx.setLineDash([dashLen, dashGap]);
+        const speed = state.dashSpeed; // px/sec-ish
+        ctx.lineDashOffset = -(nowMs * speed / 1000);
+      } else {
+        ctx.setLineDash([]);
+      }
+
+      // dropout RNG (stable per seed)
+      const dropout = clamp(state.edgeDropout, 0, 0.95);
+      const dropRng = mulberry32(hashStringToU32(state.seed + "|drop"));
+
+      let drawnEdges = 0;
+      let totalEdges = 0;
+
+      for (let li = 0; li < L - 1; li++){
+        const nA = state.layers[li];
+        const nB = state.layers[li + 1];
+        const posA = state.positions[li];
+        const posB = state.positions[li + 1];
+        const wArr = state.weights[li];
+
+        const dx = posB.x - posA.x;
+        const cdx = dx * (0.25 + 0.55 * curveAmt);
+
+        for (let i = 0; i < nA; i++){
+          const x1 = posA.x;
+          const y1 = posA.ys[i];
+          for (let j = 0; j < nB; j++){
+            totalEdges++;
+
+            // dropout
+            if (dropout > 0 && dropRng() < dropout) continue;
+
+            const x2 = posB.x;
+            const y2 = posB.ys[j];
+
+            const w = wArr[i * nB + j];
+            const mag = Math.abs(w);
+
+            // weight-based opacity
+            const alpha = state.weightOpacity ? (baseAlpha * (0.25 + 0.75 * mag)) : baseAlpha;
+            if (alpha <= 0.001) continue;
+
+            ctx.globalAlpha = alpha;
+
+            ctx.beginPath();
+            ctx.moveTo(x1, y1);
+            if (curved){
+              ctx.bezierCurveTo(x1 + cdx, y1, x2 - cdx, y2, x2, y2);
+            } else {
+              ctx.lineTo(x2, y2);
+            }
+            ctx.stroke();
+
+            drawnEdges++;
+          }
+        }
+      }
+
+      ctx.restore();
+
+      return { drawnEdges, totalEdges };
+    }
+
+    function drawNodes(nowMs){
+      const r = clamp(state.nodeRadius, 1, 200);
+      const sw = clamp(state.nodeStrokeWidth, 0.25, 20);
+
+      ctx.save();
+      ctx.lineWidth = sw;
+      ctx.strokeStyle = state.nodeStroke;
+      ctx.fillStyle = state.nodeFill;
+
+      if (state.glow){
+        ctx.shadowBlur = clamp(state.nodeGlow, 0, 200);
+        ctx.shadowColor = state.nodeStroke;
+      } else {
+        ctx.shadowBlur = 0;
+      }
+
+      for (let li = 0; li < state.layers.length; li++){
+        const pos = state.positions[li];
+        for (let i = 0; i < state.layers[li]; i++){
+          const x = pos.x;
+          const y = pos.ys[i];
+
+          ctx.beginPath();
+          ctx.arc(x, y, r, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.stroke();
+        }
+      }
+
+      ctx.restore();
+    }
+
+    function drawHoverOverlay(){
+      if (!state.hovered) return;
+
+      const { layer, index } = state.hovered;
+      const r = clamp(state.nodeRadius, 1, 200);
+      const sw = clamp(state.nodeStrokeWidth, 0.25, 20);
+
+      // highlight color: mix edge+node stroke with white-ish via alpha
+      const hiEdge = "#ffffff";
+      const hiNode = "#ffffff";
+
+      ctx.save();
+      ctx.globalAlpha = 0.9;
+      ctx.lineCap = "round";
+      ctx.lineJoin = "round";
+
+      // glow for highlight
+      if (state.glow){
+        ctx.shadowBlur = clamp(Math.max(state.nodeGlow, state.edgeGlow) + 6, 0, 240);
+        ctx.shadowColor = "#ffffff";
+      }
+
+      // incident edges (prev and next layer only)
+      const L = state.layers.length;
+
+      // from prev -> hovered
+      if (layer > 0){
+        const li = layer - 1;
+        const nA = state.layers[li];
+        const nB = state.layers[layer];
+        const posA = state.positions[li];
+        const posB = state.positions[layer];
+        const wArr = state.weights[li];
+
+        const dx = posB.x - posA.x;
+        const cdx = dx * (0.25 + 0.55 * clamp(state.curveAmount,0,1));
+
+        ctx.strokeStyle = hiEdge;
+        ctx.lineWidth = clamp(state.edgeWidth * 1.75, 0.5, 50);
+        ctx.setLineDash([]);
+
+        for (let i = 0; i < nA; i++){
+          const x1 = posA.x, y1 = posA.ys[i];
+          const x2 = posB.x, y2 = posB.ys[index];
+          const w = wArr[i * nB + index];
+          const mag = Math.abs(w);
+          const a = state.weightOpacity ? (0.15 + 0.85 * mag) : 0.6;
+          ctx.globalAlpha = 0.35 * a;
+
+          ctx.beginPath();
+          ctx.moveTo(x1, y1);
+          if (state.curved){
+            ctx.bezierCurveTo(x1 + cdx, y1, x2 - cdx, y2, x2, y2);
+          } else {
+            ctx.lineTo(x2, y2);
+          }
+          ctx.stroke();
+        }
+      }
+
+      // hovered -> next
+      if (layer < L - 1){
+        const li = layer;
+        const nA = state.layers[layer];
+        const nB = state.layers[layer + 1];
+        const posA = state.positions[layer];
+        const posB = state.positions[layer + 1];
+        const wArr = state.weights[li];
+
+        const dx = posB.x - posA.x;
+        const cdx = dx * (0.25 + 0.55 * clamp(state.curveAmount,0,1));
+
+        ctx.strokeStyle = hiEdge;
+        ctx.lineWidth = clamp(state.edgeWidth * 1.75, 0.5, 50);
+        ctx.setLineDash([]);
+
+        for (let j = 0; j < nB; j++){
+          const x1 = posA.x, y1 = posA.ys[index];
+          const x2 = posB.x, y2 = posB.ys[j];
+          const w = wArr[index * nB + j];
+          const mag = Math.abs(w);
+          const a = state.weightOpacity ? (0.15 + 0.85 * mag) : 0.6;
+          ctx.globalAlpha = 0.35 * a;
+
+          ctx.beginPath();
+          ctx.moveTo(x1, y1);
+          if (state.curved){
+            ctx.bezierCurveTo(x1 + cdx, y1, x2 - cdx, y2, x2, y2);
+          } else {
+            ctx.lineTo(x2, y2);
+          }
+          ctx.stroke();
+        }
+      }
+
+      // highlight node last
+      const pos = state.positions[layer];
+      const x = pos.x, y = pos.ys[index];
+
+      ctx.globalAlpha = 1.0;
+      ctx.strokeStyle = hiNode;
+      ctx.lineWidth = clamp(sw * 1.75, 0.5, 40);
+      ctx.fillStyle = state.background; // keep hollow-ish
+      ctx.beginPath();
+      ctx.arc(x, y, r + 1.5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+
+      // optional label
+      if (state.showHoverLabel){
+        ctx.shadowBlur = 0;
+        ctx.globalAlpha = 0.9;
+        ctx.fillStyle = "#ffffff";
+        ctx.font = "12px ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', monospace";
+        ctx.textBaseline = "bottom";
+        const label = `(${layer}, ${index})`;
+        const tx = x + r + 10;
+        const ty = y - r - 6;
+        ctx.fillText(label, tx, ty);
+      }
+
+      ctx.restore();
+    }
+
+    function pickHoveredNode(mx, my){
+      if (!state.mouse.inside) return null;
+      const hit = clamp(state.nodeRadius, 1, 200) + 6;
+
+      let best = null;
+      let bestD2 = hit * hit;
+
+      for (let li = 0; li < state.layers.length; li++){
+        const pos = state.positions[li];
+        const x = pos.x;
+        for (let i = 0; i < state.layers[li]; i++){
+          const y = pos.ys[i];
+          const dx = mx - x;
+          const dy = my - y;
+          const d2 = dx*dx + dy*dy;
+          if (d2 <= bestD2){
+            bestD2 = d2;
+            best = { layer: li, index: i };
+          }
+        }
+      }
+      return best;
+    }
+
+    /********************
+     * UI -> state
+     ********************/
+    function syncColorPair(colorInput, textInput, swatchEl, fallback){
+      const c = parseHexColor(textInput.value, parseHexColor(colorInput.value, fallback));
+      colorInput.value = c;
+      textInput.value = c;
+      swatchEl.style.setProperty("--swatch", c);
+      return c;
+    }
+
+    function applyStageHeight(){
+      const vh = clamp(Number(ui.stageHeightInput.value) || DEFAULTS.stageVh, 20, 90);
+      state.stageVh = vh;
+      document.documentElement.style.setProperty("--stage-vh", `${vh}vh`);
+      resizeCanvas();
+    }
+
+    function readUI(){
+      const parsed = parseLayerSizes(ui.layersInput.value);
+      state.layers = parsed || parseLayerSizes(DEFAULTS.layers);
+
+      state.fps = clamp(Number(ui.fpsInput.value) || DEFAULTS.fps, 1, 60);
+
+      state.glow = !!ui.glowToggle.checked;
+      state.animate = !!ui.animateToggle.checked;
+      state.curved = !!ui.curveToggle.checked;
+      state.weightOpacity = !!ui.weightToggle.checked;
+      state.showHoverLabel = !!ui.labelToggle.checked;
+
+      state.background = syncColorPair(ui.bgColor, ui.bgColorText, ui.bgSwatch, DEFAULTS.background);
+      state.nodeStroke = syncColorPair(ui.nodeStroke, ui.nodeStrokeText, ui.nodeSwatch, DEFAULTS.nodeStroke);
+      state.nodeFill = syncColorPair(ui.nodeFill, ui.nodeFillText, ui.fillSwatch, DEFAULTS.nodeFill);
+      state.edgeColor = syncColorPair(ui.edgeColor, ui.edgeColorText, ui.edgeSwatch, DEFAULTS.edgeColor);
+
+      state.padding = clamp(Number(ui.paddingInput.value) || DEFAULTS.padding, 0, 300);
+      state.nodeRadius = clamp(Number(ui.nodeRadius.value) || DEFAULTS.nodeRadius, 1, 200);
+      state.nodeStrokeWidth = clamp(Number(ui.nodeStrokeWidth.value) || DEFAULTS.nodeStrokeWidth, 0.25, 20);
+
+      state.edgeWidth = clamp(Number(ui.edgeWidth.value) || DEFAULTS.edgeWidth, 0.1, 20);
+      state.edgeOpacity = clamp(Number(ui.edgeOpacity.value) || DEFAULTS.edgeOpacity, 0, 1);
+      state.edgeDropout = clamp(Number(ui.edgeDropout.value) || DEFAULTS.edgeDropout, 0, 0.95);
+
+      state.curveAmount = clamp(Number(ui.curveAmount.value) || DEFAULTS.curveAmount, 0, 1);
+
+      state.nodeGlow = clamp(Number(ui.nodeGlow.value) || DEFAULTS.nodeGlow, 0, 240);
+      state.edgeGlow = clamp(Number(ui.edgeGlow.value) || DEFAULTS.edgeGlow, 0, 240);
+
+      state.dashLen = clamp(Number(ui.dashLen.value) || DEFAULTS.dashLen, 1, 200);
+      state.dashGap = clamp(Number(ui.dashGap.value) || DEFAULTS.dashGap, 0, 200);
+      state.dashSpeed = clamp(Number(ui.dashSpeed.value) || DEFAULTS.dashSpeed, 0, 2000);
+
+      state.seed = String(ui.seedInput.value || DEFAULTS.seed);
+    }
+
+    function updateStats(edgeInfo){
+      const layers = state.layers.join(",");
+      const nodes = state.layers.reduce((a,b)=>a+b,0);
+      const totalEdges = state.layers.slice(0,-1).reduce((sum, n, i) => sum + n * state.layers[i+1], 0);
+      const drawn = edgeInfo?.drawnEdges ?? 0;
+      const shownPct = totalEdges ? Math.round(1000 * drawn / totalEdges) / 10 : 0;
+
+      ui.stats.textContent =
+`layers: [${layers}]
+nodes: ${nodes}
+edges (full): ${totalEdges}
+edges (drawn): ${drawn} (${shownPct}%)
+canvas: ${Math.round(stage.clientWidth)}x${Math.round(stage.clientHeight)} px`;
+    }
+
+    /********************
+     * Render loop
+     ********************/
+    let last = performance.now();
+    let acc = 0;
+
+    function frame(now){
+      const frameMs = 1000 / state.fps;
+      const dt = now - last;
+      last = now;
+      acc += dt;
+
+      // Always update hovered every frame for smoothness
+      state.hovered = pickHoveredNode(state.mouse.x, state.mouse.y);
+
+      // Draw at FPS cadence (but keep input responsive)
+      if (acc >= frameMs){
+        acc = acc % frameMs;
+        clear();
+        const edgeInfo = drawEdges(now);
+        drawNodes(now);
+        drawHoverOverlay();
+        updateStats(edgeInfo);
+      }
+
+      requestAnimationFrame(frame);
+    }
+
+    /********************
+     * Events
+     ********************/
+    function forceRecalcAndRedraw(){
+      readUI();
+      computeLayout();
+      clear();
+      const edgeInfo = drawEdges(performance.now());
+      drawNodes(performance.now());
+      drawHoverOverlay();
+      updateStats(edgeInfo);
+    }
+
+    const onUIChanged = debounce(() => {
+      const oldKey = state.layers.join(",") + "|" + state.seed;
+      readUI();
+
+      // if topology changed, layout + weights may need regeneration
+      const newKey = state.layers.join(",") + "|" + state.seed;
+      if (newKey !== oldKey){
+        regenerateWeights();
+      }
+
+      computeLayout();
+    }, 60);
+
+    // Inputs
+    ui.layersInput.addEventListener("input", onUIChanged);
+    ui.fpsInput.addEventListener("input", onUIChanged);
+
+    ui.glowToggle.addEventListener("change", onUIChanged);
+    ui.animateToggle.addEventListener("change", onUIChanged);
+    ui.curveToggle.addEventListener("change", onUIChanged);
+    ui.weightToggle.addEventListener("change", onUIChanged);
+    ui.labelToggle.addEventListener("change", onUIChanged);
+
+    // Colors: keep text+picker synced both directions
+    function wireColor(colorEl, textEl, swatchEl){
+      const apply = () => { onUIChanged(); syncColorPair(colorEl, textEl, swatchEl, colorEl.value); };
+      colorEl.addEventListener("input", apply);
+      textEl.addEventListener("input", apply);
+      textEl.addEventListener("change", apply);
+    }
+    wireColor(ui.bgColor, ui.bgColorText, ui.bgSwatch);
+    wireColor(ui.nodeStroke, ui.nodeStrokeText, ui.nodeSwatch);
+    wireColor(ui.nodeFill, ui.nodeFillText, ui.fillSwatch);
+    wireColor(ui.edgeColor, ui.edgeColorText, ui.edgeSwatch);
+
+    ui.paddingInput.addEventListener("input", onUIChanged);
+    ui.nodeRadius.addEventListener("input", onUIChanged);
+    ui.nodeStrokeWidth.addEventListener("input", onUIChanged);
+    ui.edgeWidth.addEventListener("input", onUIChanged);
+    ui.edgeOpacity.addEventListener("input", onUIChanged);
+    ui.edgeDropout.addEventListener("input", onUIChanged);
+    ui.curveAmount.addEventListener("input", onUIChanged);
+
+    ui.nodeGlow.addEventListener("input", onUIChanged);
+    ui.edgeGlow.addEventListener("input", onUIChanged);
+    ui.dashLen.addEventListener("input", onUIChanged);
+    ui.dashGap.addEventListener("input", onUIChanged);
+    ui.dashSpeed.addEventListener("input", onUIChanged);
+    ui.seedInput.addEventListener("input", onUIChanged);
+
+    ui.stageHeightInput.addEventListener("input", debounce(() => {
+      applyStageHeight();
+      onUIChanged();
+    }, 40));
+
+    ui.randomizeBtn.addEventListener("click", () => {
+      // new seed (simple + time)
+      ui.seedInput.value = String((Date.now() % 1000000000) >>> 0);
+      onUIChanged();
+      regenerateWeights();
+      forceRecalcAndRedraw();
+    });
+
+    ui.exportBtn.addEventListener("click", () => {
+      // Render one crisp frame (already)
+      const link = document.createElement("a");
+      link.download = "neural-network.png";
+      link.href = canvas.toDataURL("image/png");
+      link.click();
+    });
+
+    ui.resetBtn.addEventListener("click", () => {
+      ui.layersInput.value = DEFAULTS.layers;
+      ui.fpsInput.value = DEFAULTS.fps;
+      ui.stageHeightInput.value = DEFAULTS.stageVh;
+
+      ui.glowToggle.checked = DEFAULTS.glow;
+      ui.animateToggle.checked = DEFAULTS.animate;
+      ui.curveToggle.checked = DEFAULTS.curved;
+      ui.weightToggle.checked = DEFAULTS.weightOpacity;
+      ui.labelToggle.checked = DEFAULTS.showHoverLabel;
+
+      ui.bgColor.value = DEFAULTS.background;
+      ui.bgColorText.value = DEFAULTS.background;
+
+      ui.nodeStroke.value = DEFAULTS.nodeStroke;
+      ui.nodeStrokeText.value = DEFAULTS.nodeStroke;
+
+      ui.nodeFill.value = DEFAULTS.nodeFill;
+      ui.nodeFillText.value = DEFAULTS.nodeFill;
+
+      ui.edgeColor.value = DEFAULTS.edgeColor;
+      ui.edgeColorText.value = DEFAULTS.edgeColor;
+
+      ui.paddingInput.value = DEFAULTS.padding;
+      ui.nodeRadius.value = DEFAULTS.nodeRadius;
+      ui.nodeStrokeWidth.value = DEFAULTS.nodeStrokeWidth;
+
+      ui.edgeWidth.value = DEFAULTS.edgeWidth;
+      ui.edgeOpacity.value = DEFAULTS.edgeOpacity;
+      ui.edgeDropout.value = DEFAULTS.edgeDropout;
+
+      ui.curveAmount.value = DEFAULTS.curveAmount;
+
+      ui.nodeGlow.value = DEFAULTS.nodeGlow;
+      ui.edgeGlow.value = DEFAULTS.edgeGlow;
+      ui.dashLen.value = DEFAULTS.dashLen;
+      ui.dashGap.value = DEFAULTS.dashGap;
+      ui.dashSpeed.value = DEFAULTS.dashSpeed;
+
+      ui.seedInput.value = DEFAULTS.seed;
+
+      applyStageHeight();
+      readUI();
+      regenerateWeights();
+      computeLayout();
+      forceRecalcAndRedraw();
+    });
+
+    // Mouse hover
+    stage.addEventListener("mousemove", (e) => {
+      const rect = stage.getBoundingClientRect();
+      state.mouse.x = e.clientX - rect.left;
+      state.mouse.y = e.clientY - rect.top;
+      state.mouse.inside = true;
+    });
+    stage.addEventListener("mouseleave", () => {
+      state.mouse.inside = false;
+      state.hovered = null;
+    });
+
+    // Keyboard shortcuts
+    window.addEventListener("keydown", (e) => {
+      if (e.key === " "){
+        e.preventDefault();
+        ui.animateToggle.checked = !ui.animateToggle.checked;
+        onUIChanged();
+      } else if (e.key === "r" || e.key === "R"){
+        ui.randomizeBtn.click();
+      }
+    });
+
+    window.addEventListener("resize", debounce(() => {
+      resizeCanvas();
+      forceRecalcAndRedraw();
+    }, 50));
+
+    /********************
+     * Init
+     ********************/
+    function init(){
+      // swatches
+      ui.bgSwatch.style.setProperty("--swatch", ui.bgColor.value);
+      ui.nodeSwatch.style.setProperty("--swatch", ui.nodeStroke.value);
+      ui.fillSwatch.style.setProperty("--swatch", ui.nodeFill.value);
+      ui.edgeSwatch.style.setProperty("--swatch", ui.edgeColor.value);
+
+      applyStageHeight();
+      readUI();
+      regenerateWeights();
+      resizeCanvas();
+      computeLayout();
+      forceRecalcAndRedraw();
+      requestAnimationFrame(frame);
+    }
+    init();
+  </script>
+
+  <script
+    src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+    integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz"
+    crossorigin="anonymous"
+  ></script>
+</body>
+</html>
