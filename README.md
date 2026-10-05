@@ -1,30 +1,21 @@
 # Network Animator
 
-A browser canvas tool for making glowing neural-network diagrams and animations. Configure the layers, tune the look, then record the stage or export a still frame.
+Create glowing network diagrams with animated connections. Configure the layers, tune the appearance, then record the stage or export a still frame.
 
-**[Try the live visualizer](https://programming-with-julius.github.io/network-animator/)** · **[Watch the video](https://www.youtube.com/watch?v=qEwmR20Ss9Y)**
+**[Open the live visualizer](https://programming-with-julius.github.io/network-animator/)**
 
-![Network Animator showing a glowing four-layer network with 6, 8, 8, and 10 nodes and the layer, styling, animation, and export controls below.](docs/network-animator.jpg)
+![Glowing cyan network nodes with animated dashed connections on a dark stage.](docs/network-animator.gif)
 
-*A demo diagram with ten output nodes, echoing the ten digit classes in the video's MNIST experiment.*
+## Features
 
-## Made for the video
-
-This visualizer belongs to the production tools for **[Neural Network in ChatGPT](https://www.youtube.com/watch?v=qEwmR20Ss9Y)** by Programming with Julius. The video asks whether ChatGPT can execute the mathematics of a neural network, rather than simply recognize an image itself.
-
-The experiment trains a PyTorch convolutional model on MNIST handwritten digits and extracts the operations in its forward pass into mathematical expressions. A 28 × 28 image becomes 784 pixel values; the ten final outputs represent the digits 0–9. After splitting the arithmetic into smaller pieces, the video compares ChatGPT's predictions with PyTorch's.
-
-This tool provides an illustrative network diagram for explaining layers and connections. Its seeded weights control the appearance of the edges; they are not the trained MNIST model's weights, and the diagram does not perform inference.
-
-## What you can make
-
-- Fully connected diagrams with any layer sizes entered as a comma-separated list, such as `6, 8, 8, 10`.
-- Straight or curved connections, with optional animated dashes.
-- Custom backgrounds, node fills and outlines, edge colors, widths, and opacity.
-- Independent node and edge glow, plus seeded weight-based edge opacity.
-- Sparser diagrams using edge dropout, with configurable FPS for recording.
-- Node hover highlights and optional `(layer, node)` labels.
-- A PNG export of the current canvas frame.
+- Configure fully connected layers with a comma-separated list, such as `4, 5, 5, 3`.
+- Choose straight or curved connections and optional moving dashes.
+- Customize backgrounds, node fills and outlines, edge colors, widths, and opacity.
+- Adjust node and edge glow independently.
+- Use seeded visual weights for stable edge opacity, or randomize them for a new look.
+- Hide a subset of connections with edge dropout and set the rendering FPS.
+- Highlight a node and its incident edges on hover, with optional `(layer, node)` labels.
+- Export the current canvas frame as a PNG.
 
 ## Using it
 
@@ -36,17 +27,17 @@ This tool provides an illustrative network diagram for explaining layers and con
 
 **Shortcuts:** `R` randomizes the visual weights; `Space` toggles dashed-edge animation. Hover over a node to highlight its incoming and outgoing connections.
 
-There is no build step or application server. The implementation lives in a single HTML file; the editor styling uses Bootstrap from a CDN.
-
 ## How it works
 
-Nodes are spaced vertically within each layer, and layers are spread horizontally across the canvas. Every node connects to every node in the next layer, unless edge dropout hides a subset of those connections. Curved edges use cubic Bézier paths.
+The canvas spaces nodes vertically within each layer and spreads the layers horizontally. Connections join every node to every node in the next layer; edge dropout can hide a subset. Curved connections use Bézier paths, and moving dash offsets create the animation.
 
-A seeded random generator keeps visual weights stable across redraws. Weight magnitude can affect edge opacity, while the animation loop advances the dash offset at the selected speed and FPS. The hover renderer draws a selected node and its incident edges over the rest of the diagram.
+Seeded random weights control the appearance of the edges. This is a diagram tool: it does not train a model or perform inference.
 
-## Companion tool
+Everything lives in a single HTML file. There is no build step or application server; the editor styling loads Bootstrap from a CDN.
 
-[`headline-animator`](https://github.com/Programming-with-Julius/headline-animator) creates the opening headline montage with a fixed keyword position.
+## Related tool
+
+[`headline-animator`](https://github.com/Programming-with-Julius/headline-animator) cycles headlines while keeping a shared keyword centered.
 
 ## Project note and license
 
