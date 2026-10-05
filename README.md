@@ -1,63 +1,55 @@
-[Fully vibe-coded, does not reflect me as a developer]
+# Network Animator
 
-# network-animator
+A browser canvas tool for making glowing neural-network diagrams and animations. Configure the layers, tune the look, then record the stage or export a still frame.
 
-Live demo: https://programming-with-julius.github.io/network-animator/
+**[Try the live visualizer](https://programming-with-julius.github.io/network-animator/)** · **[Watch the video](https://www.youtube.com/watch?v=qEwmR20Ss9Y)**
 
-`network-animator` is a single-file HTML tool that renders a fully-connected neural network on a canvas, with a “clean stage” area at the top for easy screen recording. You configure the amount of layers and the number of nodes per layer (e.g. `6, 8, 8, 4`), and the visualizer draws nodes + edges with a dark background, glowy outlines, and a set of styling + animation controls.
+![Network Animator showing a glowing four-layer network with 6, 8, 8, and 10 nodes and the layer, styling, animation, and export controls below.](docs/network-animator.jpg)
 
-## Features
+*A demo diagram with ten output nodes, echoing the ten digit classes in the video's MNIST experiment.*
 
-- Fully connected network rendering (layer sizes like `4,6,6,3`)
-- Reserved top stage area for clean screen recordings
-- Dark background with white node outlines and grey edges (customizable)
-- Glow controls
-  - independent node glow + edge glow
-  - configurable colors for node/edge outlines and node fill
-- Edge animation options
-  - animated dashed edges (speed/length/gap)
-  - optional curved edges
-- “Weight-based” styling
-  - seeded random weights (stable across redraws)
-  - weight-based edge opacity
-  - quick “randomize weights” action
-- Performance / style knobs
-  - edge dropout (show only a subset of edges)
-  - adjustable FPS
-- Interaction
-  - hover highlight for a node + its incident edges
-  - optional hover labels `(layer, node)`
-- Export
-  - export current frame as PNG
+## Made for the video
 
-## Usage
+This visualizer belongs to the production tools for **[Neural Network in ChatGPT](https://www.youtube.com/watch?v=qEwmR20Ss9Y)** by Programming with Julius. The video asks whether ChatGPT can execute the mathematics of a neural network, rather than simply recognize an image itself.
 
-1. Open the live demo link above, or open `index.html` locally in a browser.
-2. Enter your network shape in **Layers (nodes per layer)** (comma-separated).
-3. Tweak styling/animation controls below the canvas.
-4. Record only the top stage area for clean captures.
+The experiment trains a PyTorch convolutional model on MNIST handwritten digits and extracts the operations in its forward pass into mathematical expressions. A 28 × 28 image becomes 784 pixel values; the ten final outputs represent the digits 0–9. After splitting the arithmetic into smaller pieces, the video compares ChatGPT's predictions with PyTorch's.
 
-### Shortcuts
+This tool provides an illustrative network diagram for explaining layers and connections. Its seeded weights control the appearance of the edges; they are not the trained MNIST model's weights, and the diagram does not perform inference.
 
-- `R` — randomize weights
-- `Space` — toggle dashed-edge animation
+## What you can make
 
-## How it works (high level)
+- Fully connected diagrams with any layer sizes entered as a comma-separated list, such as `6, 8, 8, 10`.
+- Straight or curved connections, with optional animated dashes.
+- Custom backgrounds, node fills and outlines, edge colors, widths, and opacity.
+- Independent node and edge glow, plus seeded weight-based edge opacity.
+- Sparser diagrams using edge dropout, with configurable FPS for recording.
+- Node hover highlights and optional `(layer, node)` labels.
+- A PNG export of the current canvas frame.
 
-- The network is laid out in layers across the canvas:
-  - layer `x` positions are spaced horizontally between left/right padding
-  - node `y` positions are evenly distributed vertically per layer
-- Edges are drawn between every node in layer `L` and every node in layer `L+1`:
-  - optional dropout hides a fraction of edges for performance / aesthetics
-  - optional curves draw cubic Bézier connections for a “flowy” look
-- A seeded pseudo-random generator produces stable per-edge weights:
-  - the absolute weight controls edge opacity (when enabled)
-  - changing the seed or pressing “Randomize weights” regenerates weights
-- The render loop uses `requestAnimationFrame`, while honoring a target FPS:
-  - edge dashes animate via `lineDashOffset` when enabled
-- Hover detection picks the nearest node under the cursor and highlights it:
-  - incident edges (prev/next layer connections) are re-drawn on top
+## Using it
 
-## License
+1. Open the [live visualizer](https://programming-with-julius.github.io/network-animator/), or open [`index.html`](index.html) in a browser.
+2. Enter **Layers (nodes per layer)** as comma-separated numbers.
+3. Set **Stage height (vh)** and adjust the colors, padding, node sizes, edge styles, and glow controls below the canvas.
+4. Toggle **Animated dashes**, **Curved edges**, and **Weight-based opacity** to choose the presentation you want.
+5. Screen-record only the top stage, or select **Export PNG** for a still image. **Reset defaults** restores the starting configuration.
 
-MIT. See `LICENSE`.
+**Shortcuts:** `R` randomizes the visual weights; `Space` toggles dashed-edge animation. Hover over a node to highlight its incoming and outgoing connections.
+
+There is no build step or application server. The implementation lives in a single HTML file; the editor styling uses Bootstrap from a CDN.
+
+## How it works
+
+Nodes are spaced vertically within each layer, and layers are spread horizontally across the canvas. Every node connects to every node in the next layer, unless edge dropout hides a subset of those connections. Curved edges use cubic Bézier paths.
+
+A seeded random generator keeps visual weights stable across redraws. Weight magnitude can affect edge opacity, while the animation loop advances the dash offset at the selected speed and FPS. The hover renderer draws a selected node and its incident edges over the rest of the diagram.
+
+## Companion tool
+
+[`headline-animator`](https://github.com/Programming-with-Julius/headline-animator) creates the opening headline montage with a fixed keyword position.
+
+## Project note and license
+
+> Fully vibe-coded, does not reflect me as a developer.
+
+MIT. See [`LICENSE`](LICENSE).
